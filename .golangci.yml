@@ -1,0 +1,108 @@
+# Options for analysis running
+run:
+  # Timeout for analysis, e.g. 30s, 5m, default is 1m
+  timeout: 5m
+
+  # Include test files or not, default is true
+  tests: true
+
+  # Default concurrency is a available CPU number
+  concurrency: 4
+
+# Output configuration options
+output:
+  # Format options: colored-line-number|line-number|json|tab|checkstyle|code-climate
+  formats:
+    - format: colored-line-number
+      path: stdout
+
+  # Print lines of code with issue, default is true
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text, default is true
+  print-linter-name: true
+
+# All available settings of specific linters
+linters-settings:
+  errcheck:
+    # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
+    check-type-assertions: true
+
+  govet:
+    # Enable all analyzers
+    enable-all: true
+    # Disable specific analyzers
+    disable:
+      - fieldalignment # Too strict for most code
+
+  gocyclo:
+    # Minimal code complexity to report, 30 by default
+    min-complexity: 20
+
+  misspell:
+    # Correct spellings using locale preferences for US or UK.
+    locale: US
+
+  lll:
+    # Max line length, lines longer will be reported. Default is 120.
+    line-length: 120
+
+  unused:
+    # Treat code as a program (not a library) and report unused exported identifiers
+    check-exported: false
+
+  revive:
+    # Minimal confidence for issues, default is 0.8
+    min-confidence: 0.8
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+
+# Enable specific linters
+linters:
+  enable:
+    - gosimple     # Simplify code
+    - govet        # Examine Go source code and reports suspicious constructs
+    - ineffassign  # Detect when assignments to existing variables are not used
+    - staticcheck  # Go static analysis
+    - typecheck    # Like the front-end of a Go compiler
+    - misspell     # Finds commonly misspelled English words in comments
+    - bodyclose    # Checks whether HTTP response body is closed successfully
+  disable:
+    - errcheck     # Detect unchecked errors
+    - unused       # Check for unused constants, variables, functions and types
+    - gosec        # Inspects source code for security problems
+    - gocyclo      # Calculate cyclomatic complexity of functions
+    - goimports    # Check import statements are formatted according to the 'goimport' command
+    - lll          # Reports long lines
+    - unconvert    # Remove unnecessary type conversions
+    - nakedret     # Finds naked returns in functions greater than a specified function length
+    - revive       # Fast, configurable, extensible, flexible, and beautiful linter for Go
+    - godot        # Check if comments end in a period
+    - copyloopvar  # Checks for pointers to enclosing loop variables
+
+issues:
+  # Maximum count of issues with the same text
+  max-same-issues: 3
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 50
+
+  # Exclude directories from linting
+  exclude-dirs:
+    - vendor
+
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - dupl
+        - gosec
+        - lll
+    # Exclude all linters from running on generated files
+    - path: gen/
+      linters:
+        - all

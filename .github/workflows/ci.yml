@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Cancel in-progress runs when a new workflow with the same ref is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Setup job to avoid redundant setup in other jobs
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      go-version: ${{ steps.go-version.outputs.version }}
+    steps:
+      - name: Determine Go version
+        id: go-version
+        run: echo "version=1.24.5" >> $GITHUB_OUTPUT
+
+  # Build job compiles the code and caches the build artifacts
+  build:
+    name: Build
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ needs.setup.outputs.go-version }}
+          cache: true
+
+      # Cache build artifacts to speed up subsequent runs
+      - name: Cache build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-${{ hashFiles('**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-build-
+
+      - name: Install tools
+        run: ./scg install-tools
+
+      - name: Verify dependencies
+        run: ./scg verify-dependencies
+
+      # Compile the code to ensure it builds successfully
+      - name: Build
+        run: ./scg build
+
+  # Test against multiple Go versions in parallel
+  test:
+    name: Test (Go ${{ matrix.go-version }})
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: 
+          - ${{ needs.setup.outputs.go-version }}
+      fail-fast: false  # Continue with other versions if one fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      # Reuse build cache from the build job
+      - name: Cache build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-${{ hashFiles('**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-build-
+
+      - name: Install tools
+        run: ./scg install-tools
+
+      # Run tests with race detection and parallelism
+      - name: Test
+        run: ./scg test
+
+      # Upload coverage report
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.txt
+
+      # Upload coverage to Codecov (keeping this from the original workflow)
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.txt
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Lint job runs in parallel with test
+  lint:
+    name: Lint
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ needs.setup.outputs.go-version }}
+          cache: true
+
+      # Reuse build cache from the build job
+      - name: Cache build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-${{ hashFiles('**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-build-
+
+      - name: Install tools
+        run: ./scg install-tools
+
+      # Run linter using the scg script
+      - name: Lint
+        run: ./scg lint
+
+  # Security check job runs in parallel with test and lint
+  security:
+    name: Security Check
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ needs.setup.outputs.go-version }}
+          cache: true
+
+      # Reuse build cache from the build job
+      - name: Cache build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-${{ hashFiles('**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-build-
+
+      - name: Install tools
+        run: ./scg install-tools
+
+      # Run security checks using the scg script
+      - name: Security Check
+        run: ./scg security
